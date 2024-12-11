@@ -18,9 +18,9 @@ pipeline {
         NEXUS_REPO_ID = "demo-release"
         NEXUS_CREDENTIAL_ID = "nexus_credentials"
         ARTVERSION = "${env.BUILD_ID}"
-//      TOMCAT_URL = "http://192.168.1.100:8080"
-//       TOMCAT_CREDENTIAL_ID = "tomcat_credentials"
-//    }
+        TOMCAT_URL = "http://192.168.1.100:8080"
+        TOMCAT_CREDENTIAL_ID = "tomcat_credentials"
+    }
 
     stages {
 
@@ -80,16 +80,18 @@ pipeline {
                 }
             }
         }
-//     stage('DEPLOY TO TOMCAT') {
-//           steps {
+
+//      stage('DEPLOY TO TOMCAT') {
+//            steps {
 //                script {
 //                    withCredentials([usernamePassword(credentialsId: "${TOMCAT_CREDENTIAL_ID}", passwordVariable: 'TOMCAT_PASS', usernameVariable: 'TOMCAT_USER')]) {
 //                        sh '''
-//                       curl -u ${TOMCAT_USER}:${TOMCAT_PASS} -T target/vprofile-v2.war ${TOMCAT_URL}/manager/text/deploy?path=/vprofile&update=true
+//                        curl -u ${TOMCAT_USER}:${TOMCAT_PASS} -T target/vprofile-v2.war ${TOMCAT_URL}/manager/text/deploy?path=/vprofile&update=true
 //                        '''
-                    }
-                }
-            }
-
-    
-
+//                   }
+//                }
+//            }
+//        }
+//
+//    }
+}
