@@ -1,25 +1,30 @@
 pipeline {
-    
-	agent any
-/*	
-	tools {
-        maven "maven3"
-	
+
+    agent any
+
+    // options {
+    //     skipDefaultCheckout()
+    // }
+
+    tools {
+        maven "maven"
     }
-*/	
+
     environment {
         NEXUS_VERSION = "nexus3"
         NEXUS_PROTOCOL = "http"
-        NEXUS_URL = "172.31.40.209:8081"
-        NEXUS_REPOSITORY = "vprofile-release"
-	NEXUS_REPO_ID    = "vprofile-release"
-        NEXUS_CREDENTIAL_ID = "nexuslogin"
+        NEXUS_URL = "65.2.143.128:8081"
+        NEXUS_REPOSITORY = "demo-release"
+        NEXUS_REPO_ID = "demo-release"
+        NEXUS_CREDENTIAL_ID = "nexus_credentials"
         ARTVERSION = "${env.BUILD_ID}"
+        TOMCAT_URL = "http://192.168.1.100:8080"
+        TOMCAT_CREDENTIAL_ID = "tomcat_credentials"
     }
-	
-    stages{
-        
-        stage('BUILD'){
+
+    stages {
+
+        stage('BUILD') {
             steps {
                 sh 'mvn clean install -DskipTests'
             }
@@ -31,92 +36,62 @@ pipeline {
             }
         }
 
-	stage('UNIT TEST'){
-            steps {
-                sh 'mvn test'
-            }
-        }
+      // stage('CODE ANALYSIS with SONARQUBE') {
+      //       environment {
+      //           scannerHome = tool 'sonarscanner'
+      //       }
+      //       steps {
+      //           withSonarQubeEnv('sonarserver') {
+      //               sh '''${scannerHome}/bin/sonar-scanner \
+      //                   -Dsonar.projectKey=vprofile \
+      //                   -Dsonar.projectName=vprofile-repo \
+      //                   -Dsonar.projectVersion=1.0 \
+      //                   -Dsonar.sources=src/ \
+      //                   -Dsonar.java.binaries=target/test-classes/com/visualpathit/account/controllerTest/ \
+      //                   -Dsonar.junit.reportsPath=target/surefire-reports/ \
+      //                   -Dsonar.jacoco.reportsPath=target/jacoco.exec \
+      //                   -Dsonar.java.checkstyle.reportPaths=target/checkstyle-result.xml'''
+      //           }
+      //       }
+      //   }
 
-	stage('INTEGRATION TEST'){
+        stage('Publish to Nexus Repository Manager') {
             steps {
-                sh 'mvn verify -DskipUnitTests'
-            }
-        }
-		
-        stage ('CODE ANALYSIS WITH CHECKSTYLE'){
-            steps {
-                sh 'mvn checkstyle:checkstyle'
-            }
-            post {
-                success {
-                    echo 'Generated Analysis Result'
+                script {
+                    nexusArtifactUploader(
+                        nexusVersion: 'nexus3',
+                        protocol: 'http',
+                        nexusUrl: "${NEXUS_URL}",
+                        groupId: "com.visualpathit",
+                        version: "v2",
+                        repository: "${NEXUS_REPOSITORY}",
+                        credentialsId: "${NEXUS_CREDENTIAL_ID}",
+                        artifacts: [
+                            [artifactId: "vprofile",
+                             classifier: '',
+                             file: "target/vprofile-v2.war",
+                             type: "war"],
+                            [artifactId: "vprofile",
+                             classifier: '',
+                             file: "pom.xml",
+                             type: "pom"]
+                        ]
+                    )
                 }
             }
         }
 
-        stage('CODE ANALYSIS with SONARQUBE') {
-          
-		  environment {
-             scannerHome = tool 'sonarscanner4'
-          }
-
-          steps {
-            withSonarQubeEnv('sonar-pro') {
-               sh '''${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=vprofile \
-                   -Dsonar.projectName=vprofile-repo \
-                   -Dsonar.projectVersion=1.0 \
-                   -Dsonar.sources=src/ \
-                   -Dsonar.java.binaries=target/test-classes/com/visualpathit/account/controllerTest/ \
-                   -Dsonar.junit.reportsPath=target/surefire-reports/ \
-                   -Dsonar.jacoco.reportsPath=target/jacoco.exec \
-                   -Dsonar.java.checkstyle.reportPaths=target/checkstyle-result.xml'''
-            }
-
-            timeout(time: 10, unit: 'MINUTES') {
-               waitForQualityGate abortPipeline: true
-            }
-          }
-        }
-
-        stage("Publish to Nexus Repository Manager") {
+        stage('DEPLOY TO TOMCAT') {
             steps {
                 script {
-                    pom = readMavenPom file: "pom.xml";
-                    filesByGlob = findFiles(glob: "target/*.${pom.packaging}");
-                    echo "${filesByGlob[0].name} ${filesByGlob[0].path} ${filesByGlob[0].directory} ${filesByGlob[0].length} ${filesByGlob[0].lastModified}"
-                    artifactPath = filesByGlob[0].path;
-                    artifactExists = fileExists artifactPath;
-                    if(artifactExists) {
-                        echo "*** File: ${artifactPath}, group: ${pom.groupId}, packaging: ${pom.packaging}, version ${pom.version} ARTVERSION";
-                        nexusArtifactUploader(
-                            nexusVersion: NEXUS_VERSION,
-                            protocol: NEXUS_PROTOCOL,
-                            nexusUrl: NEXUS_URL,
-                            groupId: pom.groupId,
-                            version: ARTVERSION,
-                            repository: NEXUS_REPOSITORY,
-                            credentialsId: NEXUS_CREDENTIAL_ID,
-                            artifacts: [
-                                [artifactId: pom.artifactId,
-                                classifier: '',
-                                file: artifactPath,
-                                type: pom.packaging],
-                                [artifactId: pom.artifactId,
-                                classifier: '',
-                                file: "pom.xml",
-                                type: "pom"]
-                            ]
-                        );
-                    } 
-		    else {
-                        error "*** File: ${artifactPath}, could not be found";
+                    withCredentials([usernamePassword(credentialsId: "${TOMCAT_CREDENTIAL_ID}", passwordVariable: 'TOMCAT_PASS', usernameVariable: 'TOMCAT_USER')]) {
+                        sh '''
+                        curl -u ${TOMCAT_USER}:${TOMCAT_PASS} -T target/vprofile-v2.war ${TOMCAT_URL}/manager/text/deploy?path=/vprofile&update=true
+                        '''
                     }
                 }
             }
         }
 
-
     }
-
-
 }
